@@ -6,10 +6,17 @@ import { useState, useEffect, useMemo } from "react";
 const API_BASE = import.meta.env.VITE_API_BASE || "http://129.121.51.150/webhook";
 const LOGIN_URL = `${API_BASE}/api-login`;
 const UPDATE_LEAD_URL = `${API_BASE}/api-update-lead`;
+const CREATE_PROPERTY_URL = `${API_BASE}/api-create-propiedad`;
+const UPDATE_PROPERTY_URL = `${API_BASE}/api-update-propiedad`;
 
 function getLeadsURL() {
   const id = safeStr(localStorage.getItem("inmobiliaria_id"));
   return `${API_BASE}/api-leads?inmobiliaria_id=${id}`;
+}
+
+function getPropertiesURL() {
+  const id = safeStr(localStorage.getItem("inmobiliaria_id"));
+  return `${API_BASE}/api-propiedades?inmobiliaria_id=${id}`;
 }
 
 // ============================================================
@@ -129,6 +136,18 @@ const statusConfig = {
 const getTypeConfig = (tipo) => typeConfig[tipo] || typeConfig.alquilar;
 const getStatusConfig = (status) => statusConfig[status] || statusConfig.nuevo;
 
+const operacionConfig = {
+  venta: { label: "Venta", color: "#22c55e", bg: "rgba(34,197,94,0.1)", border: "rgba(34,197,94,0.2)" },
+  alquiler: { label: "Alquiler", color: "#3b82f6", bg: "rgba(59,130,246,0.1)", border: "rgba(59,130,246,0.2)" },
+};
+
+const propiedadEstadoConfig = {
+  activa: { label: "Activa", color: "#4ade80" },
+  pausada: { label: "Pausada", color: "#fbbf24" },
+  vendida: { label: "Vendida", color: "#a78bfa" },
+  alquilada: { label: "Alquilada", color: "#38bdf8" },
+};
+
 // ============================================================
 // ICONS
 // ============================================================
@@ -150,6 +169,9 @@ const Icons = {
   Lock: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>,
   Eye: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>,
   Logout: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>,
+  Building: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/></svg>,
+  Plus: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+  Edit: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
 };
 
 // ============================================================
@@ -457,6 +479,99 @@ function LeadDetailPanel({ lead, onClose, onStatusUpdate }) {
 }
 
 // ============================================================
+// PROPERTY FORM
+// ============================================================
+
+function PropertyForm({ initial, inmobiliariaId, onSaved, onClose }) {
+  const [form, setForm] = useState({
+    titulo: initial?.titulo || "",
+    tipo_operacion: initial?.tipo_operacion || "venta",
+    tipo_propiedad: initial?.tipo_propiedad || "casa",
+    precio: initial?.precio || "",
+    moneda: initial?.moneda || "USD",
+    ubicacion: initial?.ubicacion || "",
+    barrio: initial?.barrio || "",
+    ciudad: initial?.ciudad || "",
+    descripcion: initial?.descripcion || "",
+    imagen_url: initial?.imagen_url || "",
+    ambientes: initial?.ambientes || "",
+    dormitorios: initial?.dormitorios || "",
+    banos: initial?.banos || "",
+    cochera: initial?.cochera || "0",
+    superficie_total: initial?.superficie_total || "",
+    superficie_cubierta: initial?.superficie_cubierta || "",
+    destacada: initial?.destacada || "no",
+    estado: initial?.estado || "activa",
+  });
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  const update = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
+
+  const inputStyle = { width: "100%", padding: "9px 12px", background: "var(--bg-elevated)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", color: "var(--text-primary)", fontSize: "13px", outline: "none", fontFamily: "var(--font-sans)" };
+  const labelStyle = { display: "block", fontSize: "12px", fontWeight: 500, color: "var(--text-tertiary)", marginBottom: "4px" };
+  const selectStyle = { ...inputStyle, appearance: "none", cursor: "pointer" };
+
+  const handleSubmit = async () => {
+    if (!form.titulo.trim()) { setMsg("El título es obligatorio"); return; }
+    setSaving(true);
+    setMsg("");
+
+    const slug = form.titulo.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+    const payload = { ...form, inmobiliaria_id: inmobiliariaId, slug, precio: Number(form.precio) || 0, ambientes: Number(form.ambientes) || 0, dormitorios: Number(form.dormitorios) || 0, banos: Number(form.banos) || 0, cochera: Number(form.cochera) || 0, superficie_total: Number(form.superficie_total) || 0, superficie_cubierta: Number(form.superficie_cubierta) || 0 };
+
+    if (initial?.id) payload.id = initial.id;
+
+    try {
+      const url = initial ? UPDATE_PROPERTY_URL : CREATE_PROPERTY_URL;
+      const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      if (res.ok) {
+        onSaved({ ...payload, id: initial?.id || Date.now() });
+      } else {
+        setMsg("Error al guardar");
+      }
+    } catch (err) {
+      console.error("Save property failed:", err);
+      setMsg("Error de conexión");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ flex: 1, overflow: "auto", padding: "24px", display: "flex", flexDirection: "column", gap: "16px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+        <div style={{ gridColumn: "1 / -1" }}><label style={labelStyle}>Título *</label><input value={form.titulo} onChange={(e) => update("titulo", e.target.value)} style={inputStyle} placeholder="Ej: Casa 3 ambientes en Centro" /></div>
+        <div><label style={labelStyle}>Operación</label><select value={form.tipo_operacion} onChange={(e) => update("tipo_operacion", e.target.value)} style={selectStyle}><option value="venta">Venta</option><option value="alquiler">Alquiler</option></select></div>
+        <div><label style={labelStyle}>Tipo</label><select value={form.tipo_propiedad} onChange={(e) => update("tipo_propiedad", e.target.value)} style={selectStyle}><option value="casa">Casa</option><option value="departamento">Departamento</option><option value="local">Local</option><option value="terreno">Terreno</option><option value="oficina">Oficina</option></select></div>
+        <div><label style={labelStyle}>Precio</label><input type="number" value={form.precio} onChange={(e) => update("precio", e.target.value)} style={inputStyle} placeholder="85000" /></div>
+        <div><label style={labelStyle}>Moneda</label><select value={form.moneda} onChange={(e) => update("moneda", e.target.value)} style={selectStyle}><option value="USD">USD</option><option value="ARS">ARS</option></select></div>
+        <div style={{ gridColumn: "1 / -1" }}><label style={labelStyle}>Ubicación</label><input value={form.ubicacion} onChange={(e) => update("ubicacion", e.target.value)} style={inputStyle} placeholder="Barrio Norte, Rosario" /></div>
+        <div><label style={labelStyle}>Barrio</label><input value={form.barrio} onChange={(e) => update("barrio", e.target.value)} style={inputStyle} /></div>
+        <div><label style={labelStyle}>Ciudad</label><input value={form.ciudad} onChange={(e) => update("ciudad", e.target.value)} style={inputStyle} /></div>
+        <div style={{ gridColumn: "1 / -1" }}><label style={labelStyle}>Descripción</label><textarea value={form.descripcion} onChange={(e) => update("descripcion", e.target.value)} style={{ ...inputStyle, minHeight: "80px", resize: "vertical" }} placeholder="Descripción de la propiedad..." /></div>
+        <div style={{ gridColumn: "1 / -1" }}><label style={labelStyle}>URL de imagen</label><input value={form.imagen_url} onChange={(e) => update("imagen_url", e.target.value)} style={inputStyle} placeholder="https://i.ibb.co/..." /></div>
+        <div><label style={labelStyle}>Ambientes</label><input type="number" value={form.ambientes} onChange={(e) => update("ambientes", e.target.value)} style={inputStyle} /></div>
+        <div><label style={labelStyle}>Dormitorios</label><input type="number" value={form.dormitorios} onChange={(e) => update("dormitorios", e.target.value)} style={inputStyle} /></div>
+        <div><label style={labelStyle}>Baños</label><input type="number" value={form.banos} onChange={(e) => update("banos", e.target.value)} style={inputStyle} /></div>
+        <div><label style={labelStyle}>Cochera</label><input type="number" value={form.cochera} onChange={(e) => update("cochera", e.target.value)} style={inputStyle} /></div>
+        <div><label style={labelStyle}>Superficie total (m²)</label><input type="number" value={form.superficie_total} onChange={(e) => update("superficie_total", e.target.value)} style={inputStyle} /></div>
+        <div><label style={labelStyle}>Superficie cubierta (m²)</label><input type="number" value={form.superficie_cubierta} onChange={(e) => update("superficie_cubierta", e.target.value)} style={inputStyle} /></div>
+        <div><label style={labelStyle}>Estado</label><select value={form.estado} onChange={(e) => update("estado", e.target.value)} style={selectStyle}><option value="activa">Activa</option><option value="pausada">Pausada</option><option value="vendida">Vendida</option><option value="alquilada">Alquilada</option></select></div>
+        <div><label style={labelStyle}>Destacada</label><select value={form.destacada} onChange={(e) => update("destacada", e.target.value)} style={selectStyle}><option value="no">No</option><option value="si">Sí</option></select></div>
+      </div>
+      {msg && <p style={{ fontSize: "12px", color: "var(--danger)", padding: "6px 10px", background: "rgba(239,68,68,0.08)", borderRadius: "var(--radius-sm)" }}>{msg}</p>}
+      <div style={{ display: "flex", gap: "10px", marginTop: "8px" }}>
+        <button onClick={onClose} style={{ flex: 1, padding: "10px", background: "var(--bg-elevated)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", color: "var(--text-secondary)", fontSize: "13px", fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-sans)" }}>Cancelar</button>
+        <button onClick={handleSubmit} disabled={saving} style={{ flex: 1, padding: "10px", background: "var(--accent)", border: "none", borderRadius: "var(--radius-md)", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: saving ? "wait" : "pointer", fontFamily: "var(--font-sans)", boxShadow: "0 0 16px var(--accent-glow)" }}>
+          {saving ? "Guardando..." : (initial ? "Guardar cambios" : "Crear propiedad")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
 // MAIN APP
 // ============================================================
 
@@ -471,6 +586,12 @@ export default function Dashboard() {
   const [sortDir, setSortDir] = useState("desc");
   const [selectedLead, setSelectedLead] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [properties, setProperties] = useState([]);
+  const [propLoading, setPropLoading] = useState(false);
+  const [showPropForm, setShowPropForm] = useState(false);
+  const [editingProp, setEditingProp] = useState(null);
+  const [propSearch, setPropSearch] = useState("");
+  const [propFilter, setPropFilter] = useState("all");
 
   useEffect(() => {
     if (!loggedIn) { setLoading(false); return; }
@@ -503,6 +624,46 @@ export default function Dashboard() {
     localStorage.removeItem("user_email");
     setLoggedIn(false);
     setLeads([]);
+    setProperties([]);
+  };
+
+  // Fetch properties
+  useEffect(() => {
+    if (!loggedIn) return;
+    async function loadProps() {
+      try {
+        setPropLoading(true);
+        const res = await fetch(getPropertiesURL());
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const rawArray = Array.isArray(data) ? data : [];
+        const normalized = rawArray.map((item, i) => {
+          const p = item.json ? item.json : item;
+          return { ...p, id: p.id ?? i + 1, titulo: safeStr(p.titulo) || "Sin título", tipo_operacion: safeStr(p.tipo_operacion) || "venta", tipo_propiedad: safeStr(p.tipo_propiedad) || "casa", precio: Number(p.precio) || 0, moneda: safeStr(p.moneda) || "USD", ubicacion: safeStr(p.ubicacion), descripcion: safeStr(p.descripcion), imagen_url: safeStr(p.imagen_url), ambientes: Number(p.ambientes) || 0, dormitorios: Number(p.dormitorios) || 0, banos: Number(p.banos) || 0, cochera: Number(p.cochera) || 0, superficie_total: Number(p.superficie_total) || 0, destacada: safeStr(p.destacada) || "no", estado: safeStr(p.estado) || "activa" };
+        });
+        setProperties(normalized);
+      } catch (err) {
+        console.error("Failed to fetch properties:", err);
+      } finally {
+        setPropLoading(false);
+      }
+    }
+    loadProps();
+  }, [loggedIn]);
+
+  const filteredProps = useMemo(() => {
+    let result = [...properties];
+    if (propSearch) {
+      const q = propSearch.toLowerCase();
+      result = result.filter(p => p.titulo.toLowerCase().includes(q) || p.ubicacion.toLowerCase().includes(q) || p.tipo_propiedad.toLowerCase().includes(q));
+    }
+    if (propFilter !== "all") result = result.filter(p => p.tipo_operacion === propFilter);
+    return result;
+  }, [properties, propSearch, propFilter]);
+
+  const formatPrice = (precio, moneda) => {
+    if (!precio) return "Consultar";
+    return `${moneda === "USD" ? "U$D" : "$"} ${Number(precio).toLocaleString("es-AR")}`;
   };
 
   const filtered = useMemo(() => {
@@ -524,7 +685,7 @@ export default function Dashboard() {
   const thisWeek = leads.filter(l => { try { const d = new Date(l.created_at); return d >= new Date(Date.now() - 7 * 86400000); } catch { return false; } }).length;
   const converted = leads.filter(l => l.status === "convertido").length;
 
-  const pageTitles = { dashboard: "Panel", leads: "Leads", settings: "Configuración" };
+  const pageTitles = { dashboard: "Panel", leads: "Leads", propiedades: "Propiedades", settings: "Configuración" };
 
   if (!loggedIn) return <><style>{globalCSS}</style><LoginPage onLogin={() => setLoggedIn(true)} /></>;
 
@@ -535,6 +696,7 @@ export default function Dashboard() {
   const navItems = [
     { id: "dashboard", label: "Panel", icon: <Icons.Dashboard /> },
     { id: "leads", label: "Leads", icon: <Icons.Leads /> },
+    { id: "propiedades", label: "Propiedades", icon: <Icons.Building /> },
     { id: "settings", label: "Configuración", icon: <Icons.Settings /> },
   ];
 
@@ -554,6 +716,7 @@ export default function Dashboard() {
               onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = "transparent"; }}>
               {item.icon}{item.label}
               {item.id === "leads" && <span style={{ marginLeft: "auto", fontSize: "11px", fontWeight: 600, color: "var(--accent)", background: "var(--accent-glow)", padding: "1px 7px", borderRadius: "10px", fontFamily: "var(--font-mono)" }}>{leads.length}</span>}
+              {item.id === "propiedades" && <span style={{ marginLeft: "auto", fontSize: "11px", fontWeight: 600, color: "var(--accent)", background: "var(--accent-glow)", padding: "1px 7px", borderRadius: "10px", fontFamily: "var(--font-mono)" }}>{properties.length}</span>}
             </button>
           );
         })}
@@ -710,6 +873,113 @@ export default function Dashboard() {
                   ))}
                 </div>
                 <p style={{ fontSize: "12px", color: "var(--text-tertiary)", marginTop: "14px", textAlign: "center" }}>Mostrando {filtered.length} de {leads.length} leads</p>
+              </div>
+            )}
+
+            {!loading && !error && page === "propiedades" && (
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", flexWrap: "wrap", gap: "12px" }}>
+                  <p style={{ fontSize: "13px", color: "var(--text-tertiary)" }}>Gestiona las propiedades de tu inmobiliaria</p>
+                  <button onClick={() => { setEditingProp(null); setShowPropForm(true); }} style={{ display: "flex", alignItems: "center", gap: "6px", padding: "9px 18px", background: "var(--accent)", color: "#fff", border: "none", borderRadius: "var(--radius-md)", fontSize: "13px", fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-sans)", boxShadow: "0 0 16px var(--accent-glow)", transition: "all var(--transition)" }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = "var(--accent-hover)"} onMouseLeave={(e) => e.currentTarget.style.background = "var(--accent)"}
+                  ><Icons.Plus /> Nueva propiedad</button>
+                </div>
+
+                {/* Filters */}
+                <div style={{ display: "flex", gap: "10px", marginBottom: "18px", flexWrap: "wrap" }}>
+                  <div style={{ position: "relative", flex: "1 1 240px", maxWidth: "360px" }}>
+                    <input placeholder="Buscar propiedades..." value={propSearch} onChange={(e) => setPropSearch(e.target.value)}
+                      style={{ width: "100%", padding: "9px 12px 9px 36px", background: "var(--bg-surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", color: "var(--text-primary)", fontSize: "13px", outline: "none", transition: "border-color var(--transition)" }}
+                      onFocus={(e) => e.target.style.borderColor = "var(--accent)"} onBlur={(e) => e.target.style.borderColor = "var(--border)"} />
+                    <div style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "var(--text-tertiary)" }}><Icons.Search /></div>
+                  </div>
+                  <div style={{ display: "flex", gap: "6px" }}>
+                    {["all", "venta", "alquiler"].map(type => (
+                      <button key={type} onClick={() => setPropFilter(type)} style={{ padding: "8px 14px", fontSize: "12px", fontWeight: 600, borderRadius: "var(--radius-md)", cursor: "pointer", fontFamily: "var(--font-sans)", transition: "all var(--transition)", border: "1px solid", ...(propFilter === type ? { background: "var(--accent-glow)", color: "var(--accent-hover)", borderColor: "rgba(99,102,241,0.3)" } : { background: "var(--bg-surface)", color: "var(--text-tertiary)", borderColor: "var(--border)" }) }}>
+                        {type === "all" ? "Todas" : operacionConfig[type]?.label || type}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Properties grid */}
+                {propLoading ? (
+                  <div style={{ padding: "48px", textAlign: "center", color: "var(--text-tertiary)" }}>Cargando propiedades...</div>
+                ) : filteredProps.length === 0 ? (
+                  <div style={{ padding: "48px", textAlign: "center", color: "var(--text-tertiary)", background: "var(--bg-surface)", borderRadius: "var(--radius-lg)", border: "1px solid var(--border)" }}>
+                    <p style={{ fontSize: "14px", marginBottom: "8px" }}>No hay propiedades</p>
+                    <p style={{ fontSize: "12px" }}>Hacé clic en "Nueva propiedad" para agregar una</p>
+                  </div>
+                ) : (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "16px" }}>
+                    {filteredProps.map((prop, i) => {
+                      const opCfg = operacionConfig[prop.tipo_operacion] || operacionConfig.venta;
+                      const estCfg = propiedadEstadoConfig[prop.estado] || propiedadEstadoConfig.activa;
+                      return (
+                        <div key={prop.id} className="fade-in" style={{ background: "var(--bg-surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", overflow: "hidden", transition: "border-color var(--transition)", animationDelay: `${i * 40}ms`, cursor: "pointer" }}
+                          onMouseEnter={(e) => e.currentTarget.style.borderColor = "var(--border-strong)"} onMouseLeave={(e) => e.currentTarget.style.borderColor = "var(--border)"}
+                          onClick={() => { setEditingProp(prop); setShowPropForm(true); }}>
+                          {/* Image */}
+                          <div style={{ height: "160px", background: prop.imagen_url ? `url(${prop.imagen_url}) center/cover` : "linear-gradient(135deg, var(--bg-elevated), var(--bg-active))", display: "flex", alignItems: "flex-end", padding: "12px", position: "relative" }}>
+                            {!prop.imagen_url && <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-tertiary)" }}><Icons.Building /></div>}
+                            <div style={{ display: "flex", gap: "6px", position: "relative", zIndex: 1 }}>
+                              <span style={{ padding: "3px 10px", fontSize: "11px", fontWeight: 600, borderRadius: "6px", color: opCfg.color, background: opCfg.bg, border: `1px solid ${opCfg.border}`, textTransform: "uppercase", backdropFilter: "blur(8px)" }}>{opCfg.label}</span>
+                              <span style={{ padding: "3px 10px", fontSize: "11px", fontWeight: 600, borderRadius: "6px", color: "#fff", background: "rgba(0,0,0,0.6)", textTransform: "uppercase", backdropFilter: "blur(8px)" }}>{prop.tipo_propiedad}</span>
+                            </div>
+                          </div>
+                          {/* Info */}
+                          <div style={{ padding: "16px" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
+                              <h3 style={{ fontSize: "14px", fontWeight: 600, letterSpacing: "-0.01em", flex: 1, marginRight: "8px" }}>{prop.titulo}</h3>
+                              <span style={{ fontSize: "14px", fontWeight: 700, color: opCfg.color, whiteSpace: "nowrap" }}>{formatPrice(prop.precio, prop.moneda)}</span>
+                            </div>
+                            <p style={{ fontSize: "12px", color: "var(--text-tertiary)", marginBottom: "12px" }}>{prop.ubicacion}</p>
+                            <div style={{ display: "flex", gap: "12px", fontSize: "11px", color: "var(--text-muted)" }}>
+                              {prop.ambientes > 0 && <span>{prop.ambientes} amb</span>}
+                              {prop.dormitorios > 0 && <span>{prop.dormitorios} dorm</span>}
+                              {prop.banos > 0 && <span>{prop.banos} baño{prop.banos > 1 ? "s" : ""}</span>}
+                              {prop.superficie_total > 0 && <span>{prop.superficie_total}m²</span>}
+                              {prop.cochera > 0 && <span>Cochera</span>}
+                            </div>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "12px", paddingTop: "12px", borderTop: "1px solid var(--border)" }}>
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", fontSize: "11px", color: estCfg.color }}>
+                                <span style={{ width: "5px", height: "5px", borderRadius: "50%", background: estCfg.color }} />{estCfg.label}
+                              </span>
+                              {prop.destacada === "si" && <span style={{ fontSize: "10px", padding: "2px 8px", borderRadius: "4px", background: "rgba(251,191,36,0.1)", color: "#fbbf24", fontWeight: 600, textTransform: "uppercase" }}>Destacada</span>}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <p style={{ fontSize: "12px", color: "var(--text-tertiary)", marginTop: "14px", textAlign: "center" }}>Mostrando {filteredProps.length} de {properties.length} propiedades</p>
+
+                {/* Property Form Modal */}
+                {showPropForm && (
+                  <>
+                    <div onClick={() => setShowPropForm(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 90, backdropFilter: "blur(4px)" }} />
+                    <div className="slide-right" style={{ position: "fixed", right: 0, top: 0, bottom: 0, width: "min(520px, 95vw)", background: "var(--bg-surface)", borderLeft: "1px solid var(--border)", zIndex: 100, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 24px", borderBottom: "1px solid var(--border)" }}>
+                        <h2 style={{ fontSize: "16px", fontWeight: 600 }}>{editingProp ? "Editar propiedad" : "Nueva propiedad"}</h2>
+                        <button onClick={() => setShowPropForm(false)} style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "6px", cursor: "pointer", color: "var(--text-secondary)", display: "flex" }}><Icons.Close /></button>
+                      </div>
+                      <PropertyForm
+                        initial={editingProp}
+                        inmobiliariaId={inmobiliariaId}
+                        onSaved={(prop) => {
+                          if (editingProp) {
+                            setProperties(prev => prev.map(p => p.id === prop.id ? { ...p, ...prop } : p));
+                          } else {
+                            setProperties(prev => [prop, ...prev]);
+                          }
+                          setShowPropForm(false);
+                        }}
+                        onClose={() => setShowPropForm(false)}
+                      />
+                    </div>
+                  </>
+                )}
               </div>
             )}
 

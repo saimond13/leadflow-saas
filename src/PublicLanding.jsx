@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 const API_BASE = import.meta.env.VITE_API_BASE || "http://129.121.51.150/webhook";
 const BRANDING_URL = (slug) => `${API_BASE}/api-branding?inmobiliaria_id=${slug}`;
 const LEAD_URL = `${API_BASE}/lead`;
+const PROPERTIES_URL = (slug) => `${API_BASE}/api-propiedades?inmobiliaria_id=${slug}`;
 
 function unwrapN8n(item) {
   if (item && typeof item === "object" && item.json && typeof item.json === "object") return item.json;
@@ -158,6 +159,28 @@ export default function PublicLanding({ slug }) {
     loadBranding();
   }, [slug]);
 
+  // Load properties
+  const [properties, setProperties] = useState([]);
+  useEffect(() => {
+    if (!slug) return;
+    async function loadProps() {
+      try {
+        const res = await fetch(PROPERTIES_URL(slug));
+        if (!res.ok) return;
+        const data = await res.json();
+        const rawArray = Array.isArray(data) ? data : [];
+        const featured = rawArray.map(item => {
+          const p = item.json ? item.json : item;
+          return p;
+        }).filter(p => safeStr(p.destacada) === "si" && safeStr(p.estado) === "activa");
+        setProperties(featured);
+      } catch (err) {
+        console.error("Properties load failed:", err);
+      }
+    }
+    loadProps();
+  }, [slug]);
+
   // Apply dynamic colors
   const primaryColor = safeStr(branding?.color_primario) || "#6366f1";
   const secondaryColor = safeStr(branding?.color_secundario) || "#a78bfa";
@@ -298,6 +321,52 @@ export default function PublicLanding({ slug }) {
             <div style={{ width: "1px", height: "32px", background: "linear-gradient(to bottom, var(--lf-text-dim), transparent)" }} />
           </div>
         </section>
+
+        {/* ====== FEATURED PROPERTIES ====== */}
+        {properties.length > 0 && (
+          <section style={{ padding: "40px 24px 80px", maxWidth: "1100px", margin: "0 auto" }}>
+            <div style={{ textAlign: "center", marginBottom: "40px" }}>
+              <h2 style={{ fontFamily: "var(--lf-font-display)", fontSize: "clamp(28px, 5vw, 40px)", fontWeight: 400, letterSpacing: "-0.02em", marginBottom: "12px" }}>Propiedades destacadas</h2>
+              <p style={{ fontSize: "15px", color: "var(--lf-text-muted)", fontWeight: 300 }}>Explorá nuestras mejores opciones disponibles</p>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "20px" }}>
+              {properties.map((prop, i) => {
+                const precio = Number(prop.precio);
+                const moneda = safeStr(prop.moneda) || "USD";
+                const precioStr = precio ? `${moneda === "USD" ? "U$D" : "$"} ${precio.toLocaleString("es-AR")}` : "Consultar";
+                const opLabel = safeStr(prop.tipo_operacion) === "alquiler" ? "Alquiler" : "Venta";
+                const opColor = safeStr(prop.tipo_operacion) === "alquiler" ? "#3b82f6" : "#22c55e";
+                const imgUrl = safeStr(prop.imagen_url);
+                return (
+                  <div key={i} className="lf-fade-up" style={{ background: "var(--lf-surface)", border: "1px solid var(--lf-border)", borderRadius: "var(--lf-radius)", overflow: "hidden", transition: "border-color 0.2s, transform 0.2s", animationDelay: `${i * 100}ms` }}
+                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--lf-border-strong)"; e.currentTarget.style.transform = "translateY(-4px)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--lf-border)"; e.currentTarget.style.transform = "translateY(0)"; }}>
+                    <div style={{ height: "200px", background: imgUrl ? `url(${imgUrl}) center/cover` : "linear-gradient(135deg, var(--lf-elevated), var(--lf-surface))", position: "relative" }}>
+                      {!imgUrl && <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--lf-text-dim)" }}><LandingIcons.Home /></div>}
+                      <div style={{ position: "absolute", top: "12px", left: "12px", display: "flex", gap: "6px" }}>
+                        <span style={{ padding: "4px 12px", fontSize: "11px", fontWeight: 600, borderRadius: "6px", color: opColor, background: "rgba(0,0,0,0.7)", textTransform: "uppercase", backdropFilter: "blur(8px)" }}>{opLabel}</span>
+                        <span style={{ padding: "4px 12px", fontSize: "11px", fontWeight: 600, borderRadius: "6px", color: "#fff", background: "rgba(0,0,0,0.7)", textTransform: "uppercase", backdropFilter: "blur(8px)" }}>{safeStr(prop.tipo_propiedad) || "Propiedad"}</span>
+                      </div>
+                    </div>
+                    <div style={{ padding: "20px" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px", gap: "8px" }}>
+                        <h3 style={{ fontSize: "15px", fontWeight: 600, letterSpacing: "-0.01em", flex: 1 }}>{safeStr(prop.titulo) || "Propiedad"}</h3>
+                        <span style={{ fontSize: "15px", fontWeight: 700, color: opColor, whiteSpace: "nowrap" }}>{precioStr}</span>
+                      </div>
+                      <p style={{ fontSize: "13px", color: "var(--lf-text-dim)", marginBottom: "14px" }}>{safeStr(prop.ubicacion)}</p>
+                      <div style={{ display: "flex", gap: "16px", fontSize: "12px", color: "var(--lf-text-muted)" }}>
+                        {Number(prop.ambientes) > 0 && <span>{prop.ambientes} amb</span>}
+                        {Number(prop.dormitorios) > 0 && <span>{prop.dormitorios} dorm</span>}
+                        {Number(prop.banos) > 0 && <span>{prop.banos} baño{Number(prop.banos) > 1 ? "s" : ""}</span>}
+                        {Number(prop.superficie_total) > 0 && <span>{prop.superficie_total}m²</span>}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
         {/* ====== CONTACT FORM ====== */}
         <section id="contacto" style={{ padding: "80px 24px 100px", maxWidth: "560px", margin: "0 auto" }}>

@@ -780,34 +780,131 @@ export default function Dashboard() {
             {!loading && !error && page === "dashboard" && (
               <div>
                 <p style={{ fontSize: "13px", color: "var(--text-tertiary)", marginBottom: "24px" }}>Resumen del rendimiento de tu pipeline de leads</p>
-                <div style={{ display: "flex", gap: "14px", flexWrap: "wrap", marginBottom: "32px" }}>
-                  <KPICard label="Leads hoy" value={today} change={12} delay={0} />
-                  <KPICard label="Esta semana" value={thisWeek} change={8} delay={60} />
-                  <KPICard label="Este mes" value={leads.length} change={23} delay={120} />
-                  <KPICard label="Conversión" value={`${leads.length > 0 ? Math.round((converted / leads.length) * 100) : 0}%`} change={-2} delay={180} />
+
+                {/* KPI Cards */}
+                <div style={{ display: "flex", gap: "14px", flexWrap: "wrap", marginBottom: "24px" }}>
+                  <KPICard label="Leads hoy" value={today} change={today > 0 ? 12 : 0} delay={0} />
+                  <KPICard label="Esta semana" value={thisWeek} change={thisWeek > 0 ? 8 : 0} delay={60} />
+                  <KPICard label="Total leads" value={leads.length} change={leads.length > 0 ? 23 : 0} delay={120} />
+                  <KPICard label="Conversión" value={`${leads.length > 0 ? Math.round((converted / leads.length) * 100) : 0}%`} change={converted > 0 ? 5 : 0} delay={180} />
                 </div>
 
-                <div className="fade-in" style={{ background: "var(--bg-surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "24px", animationDelay: "240ms" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-                    <h3 style={{ fontSize: "14px", fontWeight: 600 }}>Actividad de leads</h3>
-                    <span style={{ fontSize: "12px", color: "var(--text-tertiary)" }}>Últimos 7 días</span>
+                {/* Charts row */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginBottom: "20px" }}>
+
+                  {/* Leads por tipo - bar chart */}
+                  <div className="fade-in" style={{ background: "var(--bg-surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "22px", animationDelay: "200ms" }}>
+                    <h3 style={{ fontSize: "13px", fontWeight: 600, marginBottom: "18px" }}>Leads por tipo</h3>
+                    {(() => {
+                      const byType = { comprar: leads.filter(l => l.tipo_lead === "comprar").length, alquilar: leads.filter(l => l.tipo_lead === "alquilar").length, vender: leads.filter(l => l.tipo_lead === "vender").length };
+                      const maxVal = Math.max(...Object.values(byType), 1);
+                      return (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                          {Object.entries(byType).map(([tipo, count]) => {
+                            const cfg = typeConfig[tipo];
+                            const pct = Math.round((count / maxVal) * 100);
+                            return (
+                              <div key={tipo}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "5px" }}>
+                                  <span style={{ fontSize: "12px", color: "var(--text-secondary)", fontWeight: 500 }}>{cfg?.label || tipo}</span>
+                                  <span style={{ fontSize: "12px", fontWeight: 700, color: cfg?.color, fontFamily: "var(--font-mono)" }}>{count}</span>
+                                </div>
+                                <div style={{ height: "8px", background: "var(--bg-active)", borderRadius: "4px", overflow: "hidden" }}>
+                                  <div className="fade-in" style={{ height: "100%", width: `${pct}%`, background: cfg?.color, borderRadius: "4px", transition: "width 0.6s ease", animationDelay: "400ms" }} />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
                   </div>
-                  <div style={{ display: "flex", alignItems: "flex-end", gap: "6px", height: "120px", padding: "0 4px" }}>
-                    {[35, 58, 42, 70, 85, 62, 90].map((h, i) => (
-                      <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "6px" }}>
-                        <div className="fade-in" style={{ width: "100%", maxWidth: "48px", height: `${h}%`, background: i === 6 ? "var(--accent)" : "var(--bg-active)", borderRadius: "4px 4px 2px 2px", transition: "all 0.3s ease", animationDelay: `${300 + i * 60}ms`, boxShadow: i === 6 ? "0 0 12px var(--accent-glow)" : "none" }} />
-                        <span style={{ fontSize: "10px", color: "var(--text-tertiary)", fontFamily: "var(--font-mono)" }}>{["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"][i]}</span>
-                      </div>
-                    ))}
+
+                  {/* Leads por estado - donut visual */}
+                  <div className="fade-in" style={{ background: "var(--bg-surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "22px", animationDelay: "300ms" }}>
+                    <h3 style={{ fontSize: "13px", fontWeight: 600, marginBottom: "18px" }}>Leads por estado</h3>
+                    {(() => {
+                      const byStatus = { nuevo: leads.filter(l => l.status === "nuevo").length, contactado: leads.filter(l => l.status === "contactado").length, calificado: leads.filter(l => l.status === "calificado").length, convertido: leads.filter(l => l.status === "convertido").length };
+                      const total = leads.length || 1;
+                      return (
+                        <div style={{ display: "flex", gap: "20px", alignItems: "center" }}>
+                          {/* Mini donut */}
+                          <div style={{ position: "relative", width: "90px", height: "90px", flexShrink: 0 }}>
+                            <svg viewBox="0 0 36 36" style={{ width: "90px", height: "90px", transform: "rotate(-90deg)" }}>
+                              {(() => {
+                                let offset = 0;
+                                return Object.entries(byStatus).map(([status, count]) => {
+                                  const pct = (count / total) * 100;
+                                  const dash = `${pct} ${100 - pct}`;
+                                  const cfg = statusConfig[status];
+                                  const el = <circle key={status} cx="18" cy="18" r="14" fill="none" stroke={cfg?.color || "#555"} strokeWidth="4" strokeDasharray={dash} strokeDashoffset={-offset} strokeLinecap="round" />;
+                                  offset += pct;
+                                  return el;
+                                });
+                              })()}
+                            </svg>
+                            <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column" }}>
+                              <span style={{ fontSize: "18px", fontWeight: 700, lineHeight: 1 }}>{leads.length}</span>
+                              <span style={{ fontSize: "9px", color: "var(--text-tertiary)" }}>total</span>
+                            </div>
+                          </div>
+                          {/* Legend */}
+                          <div style={{ display: "flex", flexDirection: "column", gap: "8px", flex: 1 }}>
+                            {Object.entries(byStatus).map(([status, count]) => {
+                              const cfg = statusConfig[status];
+                              return (
+                                <div key={status} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                    <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: cfg?.color }} />
+                                    <span style={{ fontSize: "11px", color: "var(--text-secondary)" }}>{cfg?.label}</span>
+                                  </div>
+                                  <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>{count}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Propiedades resumen */}
+                  <div className="fade-in" style={{ background: "var(--bg-surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "22px", animationDelay: "400ms" }}>
+                    <h3 style={{ fontSize: "13px", fontWeight: 600, marginBottom: "18px" }}>Propiedades</h3>
+                    {(() => {
+                      const activas = properties.filter(p => p.estado === "activa").length;
+                      const enVenta = properties.filter(p => p.tipo_operacion === "venta" && p.estado === "activa").length;
+                      const enAlquiler = properties.filter(p => p.tipo_operacion === "alquiler" && p.estado === "activa").length;
+                      const destacadas = properties.filter(p => p.destacada === "si").length;
+                      const items = [
+                        { label: "Activas", value: activas, color: "#4ade80" },
+                        { label: "En venta", value: enVenta, color: "#22c55e" },
+                        { label: "En alquiler", value: enAlquiler, color: "#3b82f6" },
+                        { label: "Destacadas", value: destacadas, color: "#fbbf24" },
+                      ];
+                      return (
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                          {items.map(item => (
+                            <div key={item.label} style={{ background: "var(--bg-elevated)", borderRadius: "var(--radius-md)", padding: "14px", textAlign: "center" }}>
+                              <p style={{ fontSize: "24px", fontWeight: 700, color: item.color, fontFamily: "var(--font-sans)" }}>{item.value}</p>
+                              <p style={{ fontSize: "10px", color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em", marginTop: "4px" }}>{item.label}</p>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
 
-                <div className="fade-in" style={{ marginTop: "20px", background: "var(--bg-surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", overflow: "hidden", animationDelay: "360ms" }}>
+                {/* Recent leads */}
+                <div className="fade-in" style={{ background: "var(--bg-surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", overflow: "hidden", animationDelay: "500ms" }}>
                   <div style={{ padding: "18px 22px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <h3 style={{ fontSize: "14px", fontWeight: 600 }}>Leads recientes</h3>
                     <button onClick={() => setPage("leads")} style={{ fontSize: "12px", color: "var(--accent)", background: "none", border: "none", cursor: "pointer", fontWeight: 600, fontFamily: "var(--font-sans)" }}>Ver todos →</button>
                   </div>
-                  {leads.slice(0, 5).map((lead, i) => (
+                  {leads.length === 0 ? (
+                    <div style={{ padding: "32px", textAlign: "center", color: "var(--text-tertiary)", fontSize: "13px" }}>No hay leads todavía</div>
+                  ) : leads.slice(0, 5).map((lead, i) => (
                     <div key={lead.id} onClick={() => setSelectedLead(lead)} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "14px 22px", borderBottom: i < 4 ? "1px solid var(--border)" : "none", cursor: "pointer", transition: "background var(--transition)" }}
                       onMouseEnter={(e) => e.currentTarget.style.background = "var(--bg-hover)"} onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
                       <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: `linear-gradient(135deg, ${getTypeConfig(lead.tipo_lead).color}30, ${getTypeConfig(lead.tipo_lead).color}10)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", fontWeight: 700, color: getTypeConfig(lead.tipo_lead).color, flexShrink: 0 }}>

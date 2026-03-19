@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { navigate } from "./App";
 
 // ============================================================
 // API
@@ -117,16 +118,22 @@ function LandingError({ message }) {
 // ============================================================
 // MAIN LANDING COMPONENT
 // ============================================================
-export default function PublicLanding({ slug }) {
+export default function PublicLanding({ slug, subpage = "home", propSlug }) {
   const [branding, setBranding] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [allProperties, setAllProperties] = useState([]);
 
   // Form state
   const [form, setForm] = useState({ nombre: "", telefono: "", propiedad: "", mensaje: "" });
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [formError, setFormError] = useState("");
+
+  // Property filters
+  const [propFilter, setPropFilter] = useState("all");
+  const [propTypeFilter, setPropTypeFilter] = useState("all");
+  const [propSearchQ, setPropSearchQ] = useState("");
 
   // Load branding
   useEffect(() => {
@@ -159,7 +166,7 @@ export default function PublicLanding({ slug }) {
     loadBranding();
   }, [slug]);
 
-  // Load properties
+  // Load properties (all active)
   const [properties, setProperties] = useState([]);
   useEffect(() => {
     if (!slug) return;
@@ -169,17 +176,32 @@ export default function PublicLanding({ slug }) {
         if (!res.ok) return;
         const data = await res.json();
         const rawArray = Array.isArray(data) ? data : [];
-        const featured = rawArray.map(item => {
+        const all = rawArray.map(item => {
           const p = item.json ? item.json : item;
           return p;
-        }).filter(p => safeStr(p.destacada) === "si" && safeStr(p.estado) === "activa");
-        setProperties(featured);
+        }).filter(p => safeStr(p.estado) === "activa");
+        setAllProperties(all);
+        setProperties(all.filter(p => safeStr(p.destacada) === "si"));
       } catch (err) {
         console.error("Properties load failed:", err);
       }
     }
     loadProps();
   }, [slug]);
+
+  // Filtered properties for listings page
+  const filteredListings = allProperties.filter(p => {
+    if (propFilter !== "all" && safeStr(p.tipo_operacion) !== propFilter) return false;
+    if (propTypeFilter !== "all" && safeStr(p.tipo_propiedad) !== propTypeFilter) return false;
+    if (propSearchQ) {
+      const q = propSearchQ.toLowerCase();
+      if (!(safeStr(p.titulo).toLowerCase().includes(q) || safeStr(p.ubicacion).toLowerCase().includes(q) || safeStr(p.tipo_propiedad).toLowerCase().includes(q))) return false;
+    }
+    return true;
+  });
+
+  // Find specific property for detail page
+  const currentProperty = propSlug ? allProperties.find(p => safeStr(p.slug) === propSlug) : null;
 
   // Apply dynamic colors
   const primaryColor = safeStr(branding?.color_primario) || "#6366f1";
@@ -254,7 +276,7 @@ export default function PublicLanding({ slug }) {
 
         {/* ====== NAVBAR ====== */}
         <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 50, padding: "16px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(7,7,10,0.8)", backdropFilter: "blur(16px)", borderBottom: "1px solid var(--lf-border)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }} onClick={() => navigate(`/${slug}`)}>
             {logoUrl ? (
               <img src={logoUrl} alt={nombre} style={{ height: "32px", objectFit: "contain", borderRadius: "4px" }} onError={(e) => e.target.style.display = "none"} />
             ) : (
@@ -262,7 +284,15 @@ export default function PublicLanding({ slug }) {
             )}
             <span style={{ fontSize: "16px", fontWeight: 600, letterSpacing: "-0.02em" }}>{nombre}</span>
           </div>
-          <div style={{ display: "flex", gap: "8px" }}>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            <span onClick={() => navigate(`/${slug}/propiedades`)} style={{ fontSize: "13px", fontWeight: 500, color: subpage === "propiedades" ? "var(--lf-primary)" : "var(--lf-text-muted)", cursor: "pointer", padding: "6px 12px", borderRadius: "6px", transition: "all 0.2s" }}
+              onMouseEnter={(e) => e.currentTarget.style.color = "var(--lf-text)"} onMouseLeave={(e) => e.currentTarget.style.color = subpage === "propiedades" ? "var(--lf-primary)" : "var(--lf-text-muted)"}>
+              Propiedades
+            </span>
+            <span onClick={() => { navigate(`/${slug}`); setTimeout(() => document.getElementById("contacto")?.scrollIntoView({ behavior: "smooth" }), 100); }} style={{ fontSize: "13px", fontWeight: 500, color: "var(--lf-text-muted)", cursor: "pointer", padding: "6px 12px", borderRadius: "6px", transition: "all 0.2s" }}
+              onMouseEnter={(e) => e.currentTarget.style.color = "var(--lf-text)"} onMouseLeave={(e) => e.currentTarget.style.color = "var(--lf-text-muted)"}>
+              Contacto
+            </span>
             {whatsappUrl && (
               <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "8px 16px", background: "#25D366", color: "#fff", borderRadius: "8px", fontSize: "13px", fontWeight: 600, textDecoration: "none", transition: "transform 0.2s" }}
                 onMouseEnter={(e) => e.currentTarget.style.transform = "scale(1.03)"} onMouseLeave={(e) => e.currentTarget.style.transform = "scale(1)"}>
@@ -272,6 +302,9 @@ export default function PublicLanding({ slug }) {
           </div>
         </nav>
 
+        {/* ====== HOME PAGE ====== */}
+        {subpage === "home" && (
+          <>
         {/* ====== HERO ====== */}
         <section style={{ position: "relative", minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "120px 24px 80px", textAlign: "center", overflow: "hidden" }}>
           {/* Background effects */}
@@ -364,6 +397,13 @@ export default function PublicLanding({ slug }) {
                   </div>
                 );
               })}
+            </div>
+            <div style={{ textAlign: "center", marginTop: "32px" }}>
+              <span onClick={() => navigate(`/${slug}/propiedades`)} style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "12px 28px", background: "var(--lf-elevated)", color: "var(--lf-text)", border: "1px solid var(--lf-border-strong)", borderRadius: "10px", fontSize: "14px", fontWeight: 600, cursor: "pointer", transition: "all 0.2s" }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--lf-primary)"; e.currentTarget.style.transform = "translateY(-2px)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--lf-border-strong)"; e.currentTarget.style.transform = "translateY(0)"; }}>
+                Ver todas las propiedades →
+              </span>
             </div>
           </section>
         )}
@@ -459,6 +499,194 @@ export default function PublicLanding({ slug }) {
                 </div>
               ))}
             </div>
+          </section>
+        )}
+          </>
+        )}
+
+        {/* ====== PROPERTY LISTINGS PAGE ====== */}
+        {subpage === "propiedades" && (
+          <section style={{ padding: "100px 24px 60px", maxWidth: "1100px", margin: "0 auto" }}>
+            <div style={{ marginBottom: "32px" }}>
+              <h1 style={{ fontFamily: "var(--lf-font-display)", fontSize: "clamp(32px, 5vw, 48px)", fontWeight: 400, letterSpacing: "-0.02em", marginBottom: "8px" }}>Propiedades</h1>
+              <p style={{ fontSize: "15px", color: "var(--lf-text-muted)", fontWeight: 300 }}>Explorá todas nuestras propiedades disponibles</p>
+            </div>
+
+            {/* Filters */}
+            <div style={{ display: "flex", gap: "10px", marginBottom: "24px", flexWrap: "wrap" }}>
+              <div style={{ position: "relative", flex: "1 1 240px", maxWidth: "360px" }}>
+                <input placeholder="Buscar propiedades..." value={propSearchQ} onChange={(e) => setPropSearchQ(e.target.value)}
+                  style={{ width: "100%", padding: "10px 12px 10px 14px", background: "var(--lf-elevated)", border: "1px solid var(--lf-border)", borderRadius: "8px", color: "var(--lf-text)", fontSize: "14px", outline: "none", fontFamily: "var(--lf-font-body)" }}
+                  onFocus={(e) => e.target.style.borderColor = primaryColor} onBlur={(e) => e.target.style.borderColor = "var(--lf-border)"} />
+              </div>
+              <div style={{ display: "flex", gap: "6px" }}>
+                {["all", "venta", "alquiler"].map(type => (
+                  <button key={type} onClick={() => setPropFilter(type)} style={{ padding: "9px 16px", fontSize: "13px", fontWeight: 600, borderRadius: "8px", cursor: "pointer", fontFamily: "var(--lf-font-body)", transition: "all 0.2s", border: "1px solid", ...(propFilter === type ? { background: `${primaryColor}20`, color: primaryColor, borderColor: `${primaryColor}40` } : { background: "var(--lf-elevated)", color: "var(--lf-text-muted)", borderColor: "var(--lf-border)" }) }}>
+                    {type === "all" ? "Todas" : type === "venta" ? "Venta" : "Alquiler"}
+                  </button>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: "6px" }}>
+                {["all", "casa", "departamento", "local", "terreno"].map(type => (
+                  <button key={type} onClick={() => setPropTypeFilter(type)} style={{ padding: "9px 14px", fontSize: "12px", fontWeight: 500, borderRadius: "8px", cursor: "pointer", fontFamily: "var(--lf-font-body)", transition: "all 0.2s", border: "1px solid", ...(propTypeFilter === type ? { background: `${primaryColor}20`, color: primaryColor, borderColor: `${primaryColor}40` } : { background: "var(--lf-elevated)", color: "var(--lf-text-muted)", borderColor: "var(--lf-border)" }) }}>
+                    {type === "all" ? "Todos" : type.charAt(0).toUpperCase() + type.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Results count */}
+            <p style={{ fontSize: "13px", color: "var(--lf-text-dim)", marginBottom: "20px" }}>{filteredListings.length} propiedad{filteredListings.length !== 1 ? "es" : ""} encontrada{filteredListings.length !== 1 ? "s" : ""}</p>
+
+            {/* Grid */}
+            {filteredListings.length === 0 ? (
+              <div style={{ padding: "60px 24px", textAlign: "center", color: "var(--lf-text-dim)", background: "var(--lf-surface)", borderRadius: "var(--lf-radius)", border: "1px solid var(--lf-border)" }}>
+                <p style={{ fontSize: "15px", marginBottom: "8px" }}>No se encontraron propiedades</p>
+                <p style={{ fontSize: "13px" }}>Probá cambiando los filtros</p>
+              </div>
+            ) : (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "20px" }}>
+                {filteredListings.map((prop, i) => {
+                  const precio = Number(prop.precio);
+                  const moneda = safeStr(prop.moneda) || "USD";
+                  const precioStr = precio ? `${moneda === "USD" ? "U$D" : "$"} ${precio.toLocaleString("es-AR")}` : "Consultar";
+                  const opLabel = safeStr(prop.tipo_operacion) === "alquiler" ? "Alquiler" : "Venta";
+                  const opColor = safeStr(prop.tipo_operacion) === "alquiler" ? "#3b82f6" : "#22c55e";
+                  const imgUrl = safeStr(prop.imagen_url);
+                  const propSlugVal = safeStr(prop.slug);
+                  return (
+                    <div key={i} className="lf-fade-up" onClick={() => propSlugVal && navigate(`/${slug}/propiedad/${propSlugVal}`)} style={{ background: "var(--lf-surface)", border: "1px solid var(--lf-border)", borderRadius: "var(--lf-radius)", overflow: "hidden", transition: "border-color 0.2s, transform 0.2s", animationDelay: `${i * 60}ms`, cursor: "pointer" }}
+                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--lf-border-strong)"; e.currentTarget.style.transform = "translateY(-4px)"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--lf-border)"; e.currentTarget.style.transform = "translateY(0)"; }}>
+                      <div style={{ height: "200px", background: imgUrl ? `url(${imgUrl}) center/cover` : "linear-gradient(135deg, var(--lf-elevated), var(--lf-surface))", position: "relative" }}>
+                        {!imgUrl && <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--lf-text-dim)" }}><LandingIcons.Home /></div>}
+                        <div style={{ position: "absolute", top: "12px", left: "12px", display: "flex", gap: "6px" }}>
+                          <span style={{ padding: "4px 12px", fontSize: "11px", fontWeight: 600, borderRadius: "6px", color: opColor, background: "rgba(0,0,0,0.7)", textTransform: "uppercase", backdropFilter: "blur(8px)" }}>{opLabel}</span>
+                          <span style={{ padding: "4px 12px", fontSize: "11px", fontWeight: 600, borderRadius: "6px", color: "#fff", background: "rgba(0,0,0,0.7)", textTransform: "uppercase", backdropFilter: "blur(8px)" }}>{safeStr(prop.tipo_propiedad)}</span>
+                        </div>
+                      </div>
+                      <div style={{ padding: "20px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px", gap: "8px" }}>
+                          <h3 style={{ fontSize: "15px", fontWeight: 600, letterSpacing: "-0.01em", flex: 1 }}>{safeStr(prop.titulo) || "Propiedad"}</h3>
+                          <span style={{ fontSize: "15px", fontWeight: 700, color: opColor, whiteSpace: "nowrap" }}>{precioStr}</span>
+                        </div>
+                        <p style={{ fontSize: "13px", color: "var(--lf-text-dim)", marginBottom: "14px" }}>{safeStr(prop.ubicacion)}</p>
+                        <div style={{ display: "flex", gap: "16px", fontSize: "12px", color: "var(--lf-text-muted)" }}>
+                          {Number(prop.ambientes) > 0 && <span>{prop.ambientes} amb</span>}
+                          {Number(prop.dormitorios) > 0 && <span>{prop.dormitorios} dorm</span>}
+                          {Number(prop.banos) > 0 && <span>{prop.banos} baño{Number(prop.banos) > 1 ? "s" : ""}</span>}
+                          {Number(prop.superficie_total) > 0 && <span>{prop.superficie_total}m²</span>}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* ====== PROPERTY DETAIL PAGE ====== */}
+        {subpage === "propiedad" && (
+          <section style={{ padding: "90px 24px 60px", maxWidth: "900px", margin: "0 auto" }}>
+            {!currentProperty ? (
+              <div style={{ padding: "80px 24px", textAlign: "center" }}>
+                <p style={{ fontSize: "16px", color: "var(--lf-text-muted)", marginBottom: "16px" }}>Propiedad no encontrada</p>
+                <span onClick={() => navigate(`/${slug}/propiedades`)} style={{ fontSize: "14px", color: "var(--lf-primary)", cursor: "pointer", fontWeight: 600 }}>← Ver todas las propiedades</span>
+              </div>
+            ) : (() => {
+              const p = currentProperty;
+              const precio = Number(p.precio);
+              const moneda = safeStr(p.moneda) || "USD";
+              const precioStr = precio ? `${moneda === "USD" ? "U$D" : "$"} ${precio.toLocaleString("es-AR")}` : "Consultar";
+              const opLabel = safeStr(p.tipo_operacion) === "alquiler" ? "Alquiler" : "Venta";
+              const opColor = safeStr(p.tipo_operacion) === "alquiler" ? "#3b82f6" : "#22c55e";
+              const imgUrl = safeStr(p.imagen_url);
+
+              return (
+                <div>
+                  {/* Breadcrumb */}
+                  <div style={{ marginBottom: "20px", fontSize: "13px", color: "var(--lf-text-dim)" }}>
+                    <span onClick={() => navigate(`/${slug}`)} style={{ cursor: "pointer", transition: "color 0.2s" }} onMouseEnter={(e) => e.currentTarget.style.color = "var(--lf-text)"} onMouseLeave={(e) => e.currentTarget.style.color = "var(--lf-text-dim)"}>Inicio</span>
+                    <span style={{ margin: "0 8px" }}>›</span>
+                    <span onClick={() => navigate(`/${slug}/propiedades`)} style={{ cursor: "pointer", transition: "color 0.2s" }} onMouseEnter={(e) => e.currentTarget.style.color = "var(--lf-text)"} onMouseLeave={(e) => e.currentTarget.style.color = "var(--lf-text-dim)"}>Propiedades</span>
+                    <span style={{ margin: "0 8px" }}>›</span>
+                    <span style={{ color: "var(--lf-text-muted)" }}>{safeStr(p.titulo)}</span>
+                  </div>
+
+                  {/* Image */}
+                  <div style={{ height: "clamp(250px, 40vw, 450px)", borderRadius: "var(--lf-radius)", overflow: "hidden", marginBottom: "28px", background: imgUrl ? `url(${imgUrl}) center/cover` : "linear-gradient(135deg, var(--lf-elevated), var(--lf-surface))", position: "relative" }}>
+                    {!imgUrl && <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--lf-text-dim)", fontSize: "48px" }}><LandingIcons.Home /></div>}
+                    <div style={{ position: "absolute", top: "16px", left: "16px", display: "flex", gap: "8px" }}>
+                      <span style={{ padding: "6px 16px", fontSize: "12px", fontWeight: 600, borderRadius: "8px", color: opColor, background: "rgba(0,0,0,0.75)", textTransform: "uppercase", backdropFilter: "blur(8px)" }}>{opLabel}</span>
+                      <span style={{ padding: "6px 16px", fontSize: "12px", fontWeight: 600, borderRadius: "8px", color: "#fff", background: "rgba(0,0,0,0.75)", textTransform: "uppercase", backdropFilter: "blur(8px)" }}>{safeStr(p.tipo_propiedad)}</span>
+                    </div>
+                  </div>
+
+                  {/* Title & price */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "16px", marginBottom: "8px", flexWrap: "wrap" }}>
+                    <h1 style={{ fontFamily: "var(--lf-font-display)", fontSize: "clamp(24px, 4vw, 36px)", fontWeight: 400, letterSpacing: "-0.02em" }}>{safeStr(p.titulo)}</h1>
+                    <span style={{ fontSize: "clamp(20px, 3vw, 28px)", fontWeight: 700, color: opColor, whiteSpace: "nowrap" }}>{precioStr}</span>
+                  </div>
+                  <p style={{ fontSize: "15px", color: "var(--lf-text-muted)", marginBottom: "24px" }}>{safeStr(p.ubicacion)}</p>
+
+                  {/* Features grid */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "12px", marginBottom: "28px" }}>
+                    {[
+                      { label: "Ambientes", value: Number(p.ambientes) },
+                      { label: "Dormitorios", value: Number(p.dormitorios) },
+                      { label: "Baños", value: Number(p.banos) },
+                      { label: "Cochera", value: Number(p.cochera) },
+                      { label: "Sup. Total", value: Number(p.superficie_total), unit: "m²" },
+                      { label: "Sup. Cubierta", value: Number(p.superficie_cubierta), unit: "m²" },
+                    ].filter(f => f.value > 0).map((f, i) => (
+                      <div key={i} style={{ background: "var(--lf-surface)", border: "1px solid var(--lf-border)", borderRadius: "10px", padding: "16px", textAlign: "center" }}>
+                        <p style={{ fontSize: "22px", fontWeight: 700, color: "var(--lf-text)", marginBottom: "4px" }}>{f.value}{f.unit || ""}</p>
+                        <p style={{ fontSize: "11px", color: "var(--lf-text-dim)", textTransform: "uppercase", letterSpacing: "0.05em" }}>{f.label}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Description */}
+                  {safeStr(p.descripcion) && (
+                    <div style={{ marginBottom: "32px" }}>
+                      <h3 style={{ fontSize: "16px", fontWeight: 600, marginBottom: "12px" }}>Descripción</h3>
+                      <p style={{ fontSize: "15px", color: "var(--lf-text-muted)", lineHeight: 1.7 }}>{safeStr(p.descripcion)}</p>
+                    </div>
+                  )}
+
+                  {/* Contact form for this property */}
+                  <div style={{ background: "var(--lf-surface)", border: "1px solid var(--lf-border)", borderRadius: "var(--lf-radius)", padding: "28px", marginBottom: "20px" }}>
+                    <h3 style={{ fontSize: "16px", fontWeight: 600, marginBottom: "16px" }}>Consultar por esta propiedad</h3>
+                    {sent ? (
+                      <div style={{ textAlign: "center", padding: "24px" }}>
+                        <p style={{ fontSize: "15px", color: "var(--lf-success)", fontWeight: 600 }}>Consulta enviada correctamente</p>
+                        <p style={{ fontSize: "13px", color: "var(--lf-text-muted)", marginTop: "4px" }}>Nos comunicaremos a la brevedad</p>
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                          <input value={form.nombre} onChange={(e) => updateField("nombre", e.target.value)} placeholder="Tu nombre *" style={{ padding: "11px 14px", background: "var(--lf-elevated)", border: "1px solid var(--lf-border)", borderRadius: "8px", color: "var(--lf-text)", fontSize: "14px", outline: "none", fontFamily: "var(--lf-font-body)" }} />
+                          <input value={form.telefono} onChange={(e) => updateField("telefono", e.target.value)} placeholder="Tu teléfono *" style={{ padding: "11px 14px", background: "var(--lf-elevated)", border: "1px solid var(--lf-border)", borderRadius: "8px", color: "var(--lf-text)", fontSize: "14px", outline: "none", fontFamily: "var(--lf-font-body)" }} />
+                        </div>
+                        <textarea value={form.mensaje} onChange={(e) => updateField("mensaje", e.target.value)} placeholder={`Hola, me interesa "${safeStr(p.titulo)}". ¿Podrían darme más información?`} rows={3} style={{ padding: "11px 14px", background: "var(--lf-elevated)", border: "1px solid var(--lf-border)", borderRadius: "8px", color: "var(--lf-text)", fontSize: "14px", outline: "none", resize: "vertical", fontFamily: "var(--lf-font-body)" }} />
+                        {formError && <p style={{ fontSize: "13px", color: "var(--lf-danger)" }}>{formError}</p>}
+                        <div style={{ display: "flex", gap: "10px" }}>
+                          <button onClick={(e) => { e.preventDefault(); setForm(prev => ({ ...prev, propiedad: safeStr(p.titulo) })); handleSubmit(e); }} disabled={sending} style={{ flex: 1, padding: "12px", background: "var(--lf-primary)", color: "#fff", border: "none", borderRadius: "8px", fontSize: "14px", fontWeight: 600, cursor: sending ? "wait" : "pointer", fontFamily: "var(--lf-font-body)", boxShadow: `0 0 20px var(--lf-primary-glow)` }}>
+                            {sending ? "Enviando..." : "Enviar consulta"}
+                          </button>
+                          {whatsappUrl && (
+                            <a href={`https://wa.me/${safeStr(branding.whatsapp).replace(/[^0-9]/g, "")}?text=${encodeURIComponent(`Hola, me interesa la propiedad "${safeStr(p.titulo)}". ¿Podrían darme más información?`)}`} target="_blank" rel="noopener noreferrer" style={{ padding: "12px 20px", background: "#25D366", color: "#fff", border: "none", borderRadius: "8px", fontSize: "14px", fontWeight: 600, textDecoration: "none", display: "flex", alignItems: "center", gap: "6px" }}>
+                              <LandingIcons.WhatsApp /> WhatsApp
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
           </section>
         )}
 

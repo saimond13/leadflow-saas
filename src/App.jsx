@@ -2,47 +2,50 @@ import { useState, useEffect } from "react";
 
 // ============================================================
 // SIMPLE ROUTER
-// Detects URL path and renders the correct view.
-// No react-router dependency needed.
-//
 // Routes:
-//   /panel  or  /panel/*   → Dashboard (private)
-//   /                      → Redirect to /panel
-//   /:slug                 → Public landing for that inmobiliaria
+//   /panel  or  /panel/*        → Dashboard (private)
+//   /                           → Redirect to /panel
+//   /:slug                      → Public landing home
+//   /:slug/propiedades          → Property listings
+//   /:slug/propiedad/:propSlug  → Property detail page
 // ============================================================
 
-// Lazy imports to keep bundles separate
 import Dashboard from "./Dashboard";
 import PublicLanding from "./PublicLanding";
 
-// Reserved paths that should NOT be treated as inmobiliaria slugs
 const RESERVED = new Set(["panel", "login", "admin", "api", "favicon.ico"]);
 
 function getRoute() {
   const path = window.location.pathname.replace(/\/+$/, "") || "/";
   const segments = path.split("/").filter(Boolean);
 
-  if (segments.length === 0) {
-    return { view: "panel" };
-  }
+  if (segments.length === 0) return { view: "panel" };
+  if (segments[0] === "panel") return { view: "panel" };
 
-  if (segments[0] === "panel") {
-    return { view: "panel" };
-  }
-
-  // Any other single segment = public landing slug
   const slug = segments[0];
-  if (!RESERVED.has(slug)) {
-    return { view: "landing", slug };
-  }
+  if (RESERVED.has(slug)) return { view: "panel" };
 
-  return { view: "panel" };
+  // /:slug/propiedades
+  if (segments[1] === "propiedades") return { view: "landing", slug, subpage: "propiedades" };
+
+  // /:slug/propiedad/:propSlug
+  if (segments[1] === "propiedad" && segments[2]) return { view: "landing", slug, subpage: "propiedad", propSlug: segments[2] };
+
+  // /:slug (home)
+  return { view: "landing", slug, subpage: "home" };
 }
+
+// Helper for SPA navigation without page reload
+function navigate(url) {
+  window.history.pushState({}, "", url);
+  window.dispatchEvent(new PopStateEvent("popstate"));
+}
+
+export { navigate };
 
 export default function App() {
   const [route, setRoute] = useState(getRoute);
 
-  // Listen for popstate (back/forward)
   useEffect(() => {
     const handleNav = () => setRoute(getRoute());
     window.addEventListener("popstate", handleNav);
@@ -50,7 +53,7 @@ export default function App() {
   }, []);
 
   if (route.view === "landing") {
-    return <PublicLanding slug={route.slug} />;
+    return <PublicLanding slug={route.slug} subpage={route.subpage} propSlug={route.propSlug} />;
   }
 
   return <Dashboard />;
